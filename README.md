@@ -1,4 +1,4 @@
-# Seller — MVP
+# Seller-MVP
 
 Мобильное приложение для продавцов (React Native + Expo)
 
