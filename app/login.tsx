@@ -1,25 +1,64 @@
+// Экран входа
+
 import React, { useState } from 'react';
 import { TomatoLogo } from '../components/TomatoLogo';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
-import { AppText } from './AppText';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
+import { AppText } from '../components/AppText';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 
 export default function LoginScreen() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+
+    const [emailError, setEmailError] = useState('');
+    const [passwordError, setPasswordError] = useState('');
+
     const router = useRouter();
 
     const handleLogin = async () => {
-        if (!email || !password) {
-            Alert.alert('Ошибка', 'Введите логин и пароль');
+        setEmailError('');
+        setPasswordError('');
+
+        const trimmedEmail = email.trim();
+        const trimmedPassword = password.trim();
+
+        if (!trimmedEmail) {
+            setEmailError('Введите email');
             return;
         }
 
-        await AsyncStorage.setItem('user', JSON.stringify({ email }));
-        router.replace('/(tabs)');
-    };
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(trimmedEmail)) {
+            setEmailError('Некорректный формат email');
+            return;
+        }
 
+        if (!trimmedPassword) {
+            setPasswordError('Введите пароль');
+            return;
+        }
+
+        if (trimmedPassword.length < 6) {
+            setPasswordError('Минимум 6 символов');
+            return;
+        }
+
+        const users = JSON.parse(await AsyncStorage.getItem('users') || '[]');
+
+        const existingUser = users.find(
+            (u: { email: string; password: string }) =>
+                u.email === trimmedEmail && u.password === trimmedPassword
+        );
+
+        if (!existingUser) {
+            setPasswordError('Неверный email или пароль');
+            return;
+        }
+
+        await AsyncStorage.setItem('user', JSON.stringify(existingUser));
+        router.replace('/(tabs)/seller');
+    };
     return (
         <View style={styles.container}>
 
@@ -32,33 +71,39 @@ export default function LoginScreen() {
                 <AppText style={styles.subtitle}>Заполните данные для доступа в кабинет продавца</AppText>
 
                 <TextInput
-                    style={styles.input}
+                    style={[styles.input, emailError && { borderColor: '#EF4444' }]}
                     placeholder="example@mail.com"
                     placeholderTextColor="#9ca3af"
                     value={email}
-                    onChangeText={setEmail}
+                    onChangeText={(value) => {
+                        setEmail(value);
+                        setEmailError('');
+                    }}
                     autoCapitalize="none"
                 />
+                {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
 
                 <TextInput
-                    style={styles.input}
+                    style={[styles.input, passwordError && { borderColor: '#EF4444' }]}
                     placeholder="Пароль"
                     placeholderTextColor="#9ca3af"
                     value={password}
-                    onChangeText={setPassword}
+                    onChangeText={(value) => {
+                        setPassword(value);
+                        setPasswordError('');
+                    }}
                     secureTextEntry
                 />
+                {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
 
                 <TouchableOpacity style={styles.button} onPress={handleLogin}>
-                    <Text style={styles.buttonText}>Продолжить</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity>
-                    <Text style={styles.forgot}>Забыли пароль?</Text>
+                    <Text style={styles.buttonText}>Войти</Text>
                 </TouchableOpacity>
 
                 <AppText style={styles.footer}>
-                    Уже есть аккаунт? <AppText style={styles.link}>Войти</AppText>
+                    Ещё нет аккаунта? <AppText style={styles.link} onPress={() => router.push('/register')}>
+                        Регистрация
+                    </AppText>
                 </AppText>
             </View>
         </View>
@@ -95,16 +140,23 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginBottom: 16,
     },
+    errorText: {
+        color: '#EF4444',
+        fontSize: 13,
+        marginBottom: 8,
+        marginLeft: 4,
+    },
     title: {
         textAlign: 'center',
-        fontSize: 20,
-        fontWeight: '600',
+        fontSize: 24,
+        fontWeight: '700',
         marginBottom: 4,
         color: '#2C3541',
     },
     subtitle: {
         textAlign: 'center',
         fontSize: 14,
+        fontWeight: '700',
         color: '#8E96A3',
         marginBottom: 24,
     },

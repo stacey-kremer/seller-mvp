@@ -1,33 +1,25 @@
+// Layout для табов
+
 import { Tabs } from 'expo-router';
+import { WalkingBagIcon } from '../../components/WalkingBagIcon';
 import React from 'react';
 
-import { HapticTab } from '@/components/haptic-tab';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
-
+export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
         headerShown: false,
-        tabBarButton: HapticTab,
-      }}>
+        tabBarActiveTintColor: '#54CCFF',
+        tabBarInactiveTintColor: '#8E96A3',
+      }}
+    >
       <Tabs.Screen
-        name="index"
+        name="seller"
         options={{
-          title: 'Home',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="explore"
-        options={{
-          title: 'Explore',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
+          title: 'Кабинет',
+          tabBarIcon: ({ color, size }) => (
+            <WalkingBagIcon size={size} color={color} />
+          ),
         }}
       />
     </Tabs>

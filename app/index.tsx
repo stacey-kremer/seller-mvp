@@ -1,3 +1,5 @@
+// Редирект на login при подгрузке приложения
+
 import { useEffect } from 'react';
 import { useRouter } from 'expo-router';
 
