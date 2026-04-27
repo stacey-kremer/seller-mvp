@@ -1,8 +1,8 @@
-// Layout для табов
-
 import { Tabs } from 'expo-router';
-import { WalkingBagIcon } from '../../components/WalkingBagIcon';
 import React from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import { ArrivalTabIcon } from '@/components/ArrivalTabIcon';
+import '../global.css';
 
 export default function TabsLayout() {
   return (
@@ -16,9 +16,31 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="seller"
         options={{
-          title: 'Кабинет',
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="products"
+        options={{
+          title: 'Мои товары',
           tabBarIcon: ({ color, size }) => (
-            <WalkingBagIcon size={size} color={color} />
+            <Ionicons name="cube-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="arrival"
+        options={{
+          title: 'Приемка',
+          tabBarIcon: ({ color, size }) => <ArrivalTabIcon size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="sales"
+        options={{
+          title: 'Продажи',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="receipt-outline" size={size} color={color} />
           ),
         }}
       />

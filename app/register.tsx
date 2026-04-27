@@ -1,15 +1,12 @@
-// Экран регистрации
-
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { AppText } from '../components/AppText';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function RegisterScreen() {
-    
   const router = useRouter();
-
   const [form, setForm] = useState({
     firstName: '',
     lastName: '',
@@ -17,10 +14,10 @@ export default function RegisterScreen() {
     email: '',
     password: '',
     confirmPassword: '',
-    accepted: false,
   });
-
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const handleChange = (key: string, value: string) => {
     setForm({ ...form, [key]: value });
@@ -28,128 +25,176 @@ export default function RegisterScreen() {
   };
 
   const handleRegister = async () => {
-  const newErrors: { [key: string]: string } = {};
+    const newErrors: { [key: string]: string } = {};
 
-  if (!form.firstName.trim()) newErrors.firstName = 'Введите имя';
-  if (!form.lastName.trim()) newErrors.lastName = 'Введите фамилию';
-  if (!form.phone.trim()) newErrors.phone = 'Введите номер телефона';
-  if (!form.email.trim()) newErrors.email = 'Введите email';
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))
-    newErrors.email = 'Некорректный email';
-  if (form.password.length < 6)
-    newErrors.password = 'Минимум 6 символов';
-  if (form.password !== form.confirmPassword)
-    newErrors.confirmPassword = 'Пароли не совпадают';
+    if (!form.firstName.trim()) newErrors.firstName = 'Введите имя';
+    if (!form.lastName.trim()) newErrors.lastName = 'Введите фамилию';
+    if (!form.phone.trim()) newErrors.phone = 'Введите номер телефона';
+    if (!form.email.trim()) newErrors.email = 'Введите email';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+      newErrors.email = 'Некорректный email';
+    }
+    if (form.password.length < 6) {
+      newErrors.password = 'Минимум 6 символов';
+    }
+    if (form.password !== form.confirmPassword) {
+      newErrors.confirmPassword = 'Пароли не совпадают';
+    }
 
-  if (Object.keys(newErrors).length > 0) {
-    setErrors(newErrors);
-    return;
-  }
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
 
-  const users = JSON.parse(await AsyncStorage.getItem('users') || '[]');
+    const users = JSON.parse((await AsyncStorage.getItem('users')) || '[]');
 
-  if (users.some((u: { email: string }) => u.email === form.email)) {
-    setErrors({ email: 'Такой email уже зарегистрирован' });
-    return;
-  }
+    if (users.some((u: { email: string }) => u.email === form.email)) {
+      setErrors({ email: 'Такой email уже зарегистрирован' });
+      return;
+    }
 
-  users.push({
-    firstName: form.firstName,
-    lastName: form.lastName,
-    phone: form.phone,
-    email: form.email,
-    password: form.password,
-  });
+    users.push({
+      firstName: form.firstName,
+      lastName: form.lastName,
+      phone: form.phone,
+      email: form.email,
+      password: form.password,
+    });
 
-  await AsyncStorage.setItem('users', JSON.stringify(users));
+    await AsyncStorage.setItem('users', JSON.stringify(users));
+    await AsyncStorage.setItem('user', JSON.stringify({ email: form.email }));
+    router.replace('/(tabs)/seller');
+  };
 
-  await AsyncStorage.setItem('user', JSON.stringify({ email: form.email }));
-  router.replace('/(tabs)/seller');
-};
+  const renderInput = ({
+    icon,
+    placeholder,
+    value,
+    field,
+    keyboardType,
+    secureTextEntry,
+    autoCapitalize,
+    rightIcon,
+    onRightPress,
+  }: {
+    icon: keyof typeof Ionicons.glyphMap;
+    placeholder: string;
+    value: string;
+    field: string;
+    keyboardType?: 'default' | 'email-address' | 'phone-pad';
+    secureTextEntry?: boolean;
+    autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
+    rightIcon?: keyof typeof Ionicons.glyphMap;
+    onRightPress?: () => void;
+  }) => (
+    <>
+      <View style={[styles.inputWrapper, errors[field] && styles.inputWrapperError]}>
+        <Ionicons name={icon} size={18} color="#9ca3af" />
+        <TextInput
+          style={styles.input}
+          placeholder={placeholder}
+          placeholderTextColor="#9ca3af"
+          value={value}
+          onChangeText={(v) => handleChange(field, v)}
+          keyboardType={keyboardType}
+          secureTextEntry={secureTextEntry}
+          autoCapitalize={autoCapitalize}
+        />
+        {rightIcon ? (
+          <TouchableOpacity onPress={onRightPress}>
+            <Ionicons name={rightIcon} size={18} color="#9ca3af" />
+          </TouchableOpacity>
+        ) : null}
+      </View>
+      {errors[field] ? <Text style={styles.errorText}>{errors[field]}</Text> : null}
+    </>
+  );
 
   return (
-    <View style={styles.container}>
-      <View style={styles.card}>
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
+        <View style={styles.card}>
+          <AppText style={styles.title}>Регистрация</AppText>
+          <AppText style={styles.subtitle}>Создайте аккаунт продавца</AppText>
 
-        <AppText style={styles.title}>Регистрация</AppText>
-        <AppText style={styles.subtitle}>Создайте аккаунт продавца</AppText>
+          {renderInput({
+            icon: 'person-outline',
+            placeholder: 'Имя',
+            value: form.firstName,
+            field: 'firstName',
+            autoCapitalize: 'words',
+          })}
 
-        <TextInput
-          style={[styles.input, errors.firstName && { borderColor: '#EF4444' }]}
-          placeholder="Имя"
-          value={form.firstName}
-          onChangeText={(v) => handleChange('firstName', v)}
-        />
-        {errors.firstName && <Text style={styles.errorText}>{errors.firstName}</Text>}
+          {renderInput({
+            icon: 'person-circle-outline',
+            placeholder: 'Фамилия',
+            value: form.lastName,
+            field: 'lastName',
+            autoCapitalize: 'words',
+          })}
 
-        <TextInput
-          style={[styles.input, errors.lastName && { borderColor: '#EF4444' }]}
-          placeholder="Фамилия"
-          value={form.lastName}
-          onChangeText={(v) => handleChange('lastName', v)}
-        />
-        {errors.lastName && <Text style={styles.errorText}>{errors.lastName}</Text>}
+          {renderInput({
+            icon: 'call-outline',
+            placeholder: 'Номер телефона',
+            value: form.phone,
+            field: 'phone',
+            keyboardType: 'phone-pad',
+          })}
 
-        <TextInput
-          style={[styles.input, errors.phone && { borderColor: '#EF4444' }]}
-          placeholder="Номер телефона"
-          keyboardType="phone-pad"
-          value={form.phone}
-          onChangeText={(v) => handleChange('phone', v)}
-        />
-        {errors.phone && <Text style={styles.errorText}>{errors.phone}</Text>}
+          {renderInput({
+            icon: 'mail-outline',
+            placeholder: 'Email',
+            value: form.email,
+            field: 'email',
+            keyboardType: 'email-address',
+            autoCapitalize: 'none',
+          })}
 
-        <TextInput
-          style={[styles.input, errors.email && { borderColor: '#EF4444' }]}
-          placeholder="Email"
-          autoCapitalize="none"
-          value={form.email}
-          onChangeText={(v) => handleChange('email', v)}
-        />
-        {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
+          {renderInput({
+            icon: 'lock-closed-outline',
+            placeholder: 'Пароль',
+            value: form.password,
+            field: 'password',
+            secureTextEntry: !showPassword,
+            rightIcon: showPassword ? 'eye-outline' : 'eye-off-outline',
+            onRightPress: () => setShowPassword((value) => !value),
+          })}
 
-        <TextInput
-          style={[styles.input, errors.password && { borderColor: '#EF4444' }]}
-          placeholder="Пароль"
-          secureTextEntry
-          value={form.password}
-          onChangeText={(v) => handleChange('password', v)}
-        />
-        {errors.password && <Text style={styles.errorText}>{errors.password}</Text>}
+          {renderInput({
+            icon: 'shield-checkmark-outline',
+            placeholder: 'Подтвердите пароль',
+            value: form.confirmPassword,
+            field: 'confirmPassword',
+            secureTextEntry: !showConfirmPassword,
+            rightIcon: showConfirmPassword ? 'eye-outline' : 'eye-off-outline',
+            onRightPress: () => setShowConfirmPassword((value) => !value),
+          })}
 
-        <TextInput
-          style={[styles.input, errors.confirmPassword && { borderColor: '#EF4444' }]}
-          placeholder="Повторите пароль"
-          secureTextEntry
-          value={form.confirmPassword}
-          onChangeText={(v) => handleChange('confirmPassword', v)}
-        />
-        {errors.confirmPassword && <Text style={styles.errorText}>{errors.confirmPassword}</Text>}
+          <TouchableOpacity style={styles.button} onPress={handleRegister}>
+            <Text style={styles.buttonText}>Зарегистрироваться</Text>
+          </TouchableOpacity>
 
-        {errors.accepted && <Text style={styles.errorText}>{errors.accepted}</Text>}
-
-        <TouchableOpacity style={styles.button} onPress={handleRegister}>
-          <Text style={styles.buttonText}>Зарегистрироваться</Text>
-        </TouchableOpacity>
-
-        <AppText style={styles.footer}>
-          Уже есть аккаунт?{' '}
-          <Text style={styles.link} onPress={() => router.replace('/login')}>
-            Войти
-          </Text>
-        </AppText>
-      </View>
-    </View>
+          <AppText style={styles.footer}>
+            Уже есть аккаунт?{' '}
+            <Text style={styles.link} onPress={() => router.replace('/login')}>
+              Войти
+            </Text>
+          </AppText>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f9fafb',
+  scrollContainer: {
+    flexGrow: 1,
     justifyContent: 'center',
-    alignItems: 'center',
     paddingHorizontal: 20,
+    backgroundColor: '#f9fafb',
   },
   card: {
     width: '100%',
@@ -162,16 +207,6 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
     elevation: 3,
-  },
-  logoCircle: {
-    alignSelf: 'center',
-    backgroundColor: '#D4F7E0FF',
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
   },
   title: {
     textAlign: 'center',
@@ -187,41 +222,31 @@ const styles = StyleSheet.create({
     color: '#8E96A3',
     marginBottom: 24,
   },
-  input: {
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
     borderWidth: 1,
     borderColor: '#e5e7eb',
-    borderRadius: 10,
-    padding: 14,
-    fontSize: 15,
-    marginBottom: 14,
+    borderRadius: 14,
+    paddingHorizontal: 14,
     backgroundColor: '#f9fafb',
+    marginBottom: 14,
+    gap: 10,
+  },
+  inputWrapperError: {
+    borderColor: '#EF4444',
+  },
+  input: {
+    flex: 1,
+    paddingVertical: 14,
+    fontSize: 15,
+    color: '#2C3541',
   },
   errorText: {
     color: '#EF4444',
     fontSize: 13,
     marginBottom: 8,
     marginLeft: 4,
-  },
-  checkboxRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderWidth: 1,
-    borderColor: '#8E96A3',
-    borderRadius: 4,
-    marginRight: 8,
-  },
-  checkboxActive: {
-    backgroundColor: '#54CCFF',
-    borderColor: '#54CCFF',
-  },
-  checkboxText: {
-    color: '#2C3541',
-    fontSize: 14,
   },
   button: {
     backgroundColor: '#D4F7E0FF',

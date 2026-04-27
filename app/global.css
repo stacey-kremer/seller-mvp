@@ -1,0 +1,12 @@
+input:focus,
+textarea:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+input, textarea {
+  outline: none;
+  border: none;
+  box-sizing: border-box;
+  font-size: 16px;
+}
