@@ -20,7 +20,11 @@
       "supportsTablet": true
     },
     "android": {
-      "softwareKeyboardLayoutMode": "pan"
+      "softwareKeyboardLayoutMode": "pan",
+      "permissions": [
+        "android.permission.CAMERA"
+      ],
+      "package": "com.staceykremer.shopapp"
     },
     "web": {
       "output": "static",
@@ -29,11 +33,18 @@
     "plugins": [
       "expo-router",
       "expo-font",
-      "expo-barcode-scanner"
+      "expo-camera",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "d6149477-672f-4cd6-a9d7-ae97ea99f65f"
+      }
     }
   }
 }

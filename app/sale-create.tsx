@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Modal,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -13,6 +12,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 type Product = {
   id: string;
@@ -190,7 +190,7 @@ export default function SaleCreateScreen() {
           </View>
         </View>
 
-        <Text style={styles.sectionTitle}>СПОСОБ ОПЛАТЫ</Text>
+        <Text style={styles.sectionCaption}>Способ оплаты</Text>
         <View style={styles.paymentRow}>
           {PAYMENT_OPTIONS.map((option) => {
             const active = draft.paymentMethod === option.key;
@@ -203,7 +203,7 @@ export default function SaleCreateScreen() {
                 <Ionicons
                   name={option.icon}
                   size={16}
-                  color={active ? '#FFFFFF' : '#2C3541'}
+                  color="#2C3541"
                 />
                 <Text style={[styles.paymentChipText, active && styles.paymentChipTextActive]}>
                   {option.label}
@@ -213,7 +213,7 @@ export default function SaleCreateScreen() {
           })}
         </View>
 
-        <Text style={styles.sectionTitle}>ДОБАВИТЬ ТОВАР</Text>
+        <Text style={styles.sectionCaption}>Добавить товар</Text>
         <TouchableOpacity
           style={styles.actionCard}
           onPress={() => router.push({ pathname: '/camera-scanner', params: { source: 'sale' } })}
@@ -250,7 +250,7 @@ export default function SaleCreateScreen() {
           <Ionicons name="chevron-forward" size={18} color="#8E96A3" />
         </TouchableOpacity>
 
-        <Text style={styles.sectionTitle}>СОСТАВ ПРОДАЖИ</Text>
+        <Text style={styles.sectionCaption}>Список позиций</Text>
         <View style={styles.itemsCard}>
           {draft.items.length ? (
             draft.items.map((item) => (
@@ -283,7 +283,7 @@ export default function SaleCreateScreen() {
           )}
         </View>
 
-        <Text style={styles.sectionTitle}>КОММЕНТАРИЙ</Text>
+        <Text style={styles.sectionCaption}>Комментарий</Text>
         <TextInput
           style={styles.noteInput}
           value={draft.note}
@@ -292,13 +292,12 @@ export default function SaleCreateScreen() {
           placeholderTextColor="#9CA3AF"
           multiline
         />
+        <View style={styles.footer}>
+          <TouchableOpacity style={styles.primaryButton} onPress={saveSale}>
+            <Text style={styles.primaryButtonText}>Сохранить продажу</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
-
-      <View style={styles.footer}>
-        <TouchableOpacity style={styles.primaryButton} onPress={saveSale}>
-          <Text style={styles.primaryButtonText}>Сохранить продажу</Text>
-        </TouchableOpacity>
-      </View>
 
       <Modal visible={catalogVisible} transparent animationType="fade" onRequestClose={() => setCatalogVisible(false)}>
         <View style={styles.modalBackdrop}>
@@ -364,23 +363,25 @@ export default function SaleCreateScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#F6F7FB',
+    backgroundColor: '#F9FAFB',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 14,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E8EDF5',
+    backgroundColor: '#F9FAFB',
   },
   headerBack: {
     width: 36,
     height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   headerTitle: {
     fontSize: 22,
@@ -389,45 +390,51 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 16,
-    paddingBottom: 120,
+    paddingBottom: 32,
   },
   summaryCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 18,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E8EDF5',
+    borderColor: '#E5E7EB',
     padding: 16,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 16,
+    shadowColor: '#2C3541',
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
   summaryLabel: {
-    color: '#6B7280',
-    fontSize: 13,
+    color: '#8E96A3',
+    fontSize: 12,
     marginBottom: 6,
+    textTransform: 'uppercase',
+    fontWeight: '700',
   },
   summaryValue: {
-    color: '#2C3541',
+    color: '#54CCFF',
     fontSize: 28,
-    fontWeight: '800',
+    fontWeight: '700',
   },
   summaryRight: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor: '#D4F7E0',
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
   summaryPositions: {
-    color: '#2F80ED',
+    color: '#2C3541',
     fontWeight: '700',
     fontSize: 13,
   },
-  sectionTitle: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#4B5563',
-    letterSpacing: 0.8,
+  sectionCaption: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#111827',
     marginBottom: 10,
   },
   paymentRow: {
@@ -441,14 +448,14 @@ const styles = StyleSheet.create({
     gap: 6,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#E8EDF5',
+    borderColor: '#E5E7EB',
     backgroundColor: '#FFFFFF',
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
   paymentChipActive: {
-    backgroundColor: '#2F80ED',
-    borderColor: '#2F80ED',
+    backgroundColor: '#D4F7E0',
+    borderColor: '#D4F7E0',
   },
   paymentChipText: {
     color: '#2C3541',
@@ -456,7 +463,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   paymentChipTextActive: {
-    color: '#FFFFFF',
+    color: '#2C3541',
   },
   actionCard: {
     flexDirection: 'row',
@@ -464,9 +471,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E8EDF5',
+    borderColor: '#E5E7EB',
     padding: 14,
     marginBottom: 12,
+    shadowColor: '#2C3541',
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
   actionIcon: {
     width: 42,
@@ -495,9 +507,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E8EDF5',
+    borderColor: '#E5E7EB',
     padding: 14,
     marginBottom: 18,
+    shadowColor: '#2C3541',
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
   itemRow: {
     flexDirection: 'row',
@@ -530,7 +547,7 @@ const styles = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 10,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: '#EFF9FF',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -545,32 +562,29 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E8EDF5',
+    borderColor: '#E5E7EB',
     padding: 14,
     textAlignVertical: 'top',
     fontSize: 15,
     color: '#2C3541',
+    shadowColor: '#2C3541',
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
   footer: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    paddingHorizontal: 16,
     paddingTop: 12,
-    paddingBottom: 20,
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#E8EDF5',
+    paddingBottom: 8,
   },
   primaryButton: {
-    backgroundColor: '#2F80ED',
+    backgroundColor: '#D4F7E0',
     borderRadius: 12,
     alignItems: 'center',
     paddingVertical: 14,
   },
   primaryButtonText: {
-    color: '#FFFFFF',
+    color: '#2C3541',
     fontWeight: '700',
     fontSize: 15,
   },

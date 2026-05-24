@@ -142,6 +142,7 @@ export default function SalesScreen() {
             </View>
           </View>
 
+          <Text style={styles.sectionCaption}>Поиск и фильтры</Text>
           <View style={styles.searchBar}>
             <Ionicons name="search-outline" size={18} color="#9CA3AF" />
             <TextInput
@@ -173,7 +174,7 @@ export default function SalesScreen() {
                 <Ionicons
                   name={item.icon}
                   size={15}
-                  color={paymentFilter === item.key ? '#FFFFFF' : '#2C3541'}
+                  color="#2C3541"
                 />
                 <Text
                   style={[
@@ -188,7 +189,7 @@ export default function SalesScreen() {
           </ScrollView>
 
           <View style={styles.listHeader}>
-            <Text style={styles.listTitle}>Последние транзакции</Text>
+            <Text style={styles.listLabel}>Список продаж</Text>
             <Text style={styles.listCounter}>{filteredSales.length} позиции</Text>
           </View>
 
@@ -224,7 +225,7 @@ export default function SalesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F6F7FB',
+    backgroundColor: '#F9FAFB',
     paddingHorizontal: 16,
   },
   statsRow: {
@@ -235,40 +236,58 @@ const styles = StyleSheet.create({
   statCard: {
     flex: 1,
     backgroundColor: '#FFFFFF',
-    borderRadius: 18,
+    borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#E8EDF5',
+    borderColor: '#E5E7EB',
+    shadowColor: '#2C3541',
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
   statIconWrap: {
     width: 34,
     height: 34,
     borderRadius: 10,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: '#EFF9FF',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 10,
   },
   statLabel: {
-    fontSize: 13,
-    color: '#6B7280',
+    fontSize: 12,
+    color: '#8E96A3',
     marginBottom: 8,
+    textTransform: 'uppercase',
+    fontWeight: '700',
   },
   statValue: {
-    fontSize: 30,
+    fontSize: 28,
     fontWeight: '800',
     color: '#2C3541',
+  },
+  sectionCaption: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 10,
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 18,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E8EDF5',
+    borderColor: '#E5E7EB',
     paddingHorizontal: 14,
     paddingVertical: 12,
     marginBottom: 12,
+    shadowColor: '#2C3541',
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
   searchInput: {
     flex: 1,
@@ -280,7 +299,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 8,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: '#EFF9FF',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -298,11 +317,11 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E8EDF5',
+    borderColor: '#E5E7EB',
   },
   paymentFilterChipActive: {
-    backgroundColor: '#2F80ED',
-    borderColor: '#2F80ED',
+    backgroundColor: '#D4F7E0',
+    borderColor: '#D4F7E0',
   },
   paymentFilterText: {
     color: '#2C3541',
@@ -310,34 +329,40 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   paymentFilterTextActive: {
-    color: '#FFFFFF',
+    color: '#2C3541',
   },
   listHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginTop: 4,
     marginBottom: 10,
   },
-  listTitle: {
-    fontSize: 20,
+  listLabel: {
+    fontSize: 14,
     fontWeight: '700',
-    color: '#2C3541',
+    color: '#111827',
   },
   listCounter: {
-    fontSize: 12,
-    color: '#8E96A3',
-    fontWeight: '600',
+    fontSize: 14,
+    color: '#64748B',
+    fontWeight: '700',
   },
   listContent: {
     paddingBottom: 120,
   },
   saleCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 18,
+    borderRadius: 16,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#E8EDF5',
+    borderColor: '#E5E7EB',
     marginBottom: 12,
+    shadowColor: '#2C3541',
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
   saleTop: {
     flexDirection: 'row',
@@ -384,9 +409,9 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
   saleAmount: {
-    color: '#2F80ED',
-    fontSize: 18,
-    fontWeight: '800',
+    color: '#54CCFF',
+    fontSize: 17,
+    fontWeight: '700',
   },
   saleDetails: {
     color: '#8E96A3',
@@ -403,7 +428,7 @@ const styles = StyleSheet.create({
     width: 70,
     height: 70,
     borderRadius: 22,
-    backgroundColor: '#EAF6FF',
+    backgroundColor: '#EFF9FF',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
@@ -436,9 +461,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.14,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
     elevation: 4,
   },
 });

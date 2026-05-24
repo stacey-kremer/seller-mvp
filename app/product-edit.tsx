@@ -83,6 +83,7 @@ export default function ProductEditScreen() {
     id?: string;
     barcode?: string;
     fromArrival?: string;
+    returnTo?: string;
   }>();
   const [product, setProduct] = useState<Product>(createProduct());
   const [isEditing, setIsEditing] = useState(false);
@@ -203,6 +204,11 @@ export default function ProductEditScreen() {
 
       await AsyncStorage.setItem('arrivalDraft', JSON.stringify(draft));
       router.replace('/(tabs)/arrival');
+      return;
+    }
+
+    if (params.returnTo === 'sale-create') {
+      router.replace('/sale-create');
       return;
     }
 

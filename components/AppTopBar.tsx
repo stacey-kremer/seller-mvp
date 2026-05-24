@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type UserProfile = {
   firstName?: string;
@@ -27,6 +28,7 @@ type AppTopBarProps = {
 
 export function AppTopBar({ title }: AppTopBarProps) {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [menuVisible, setMenuVisible] = useState(false);
   const [profileVisible, setProfileVisible] = useState(false);
   const [profile, setProfile] = useState<UserProfile>({});
@@ -119,7 +121,7 @@ export function AppTopBar({ title }: AppTopBarProps) {
 
   return (
     <>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
         <TouchableOpacity style={styles.iconButton} onPress={() => setMenuVisible(true)}>
           <Ionicons name="menu-outline" size={30} color="#2C3541" />
         </TouchableOpacity>
@@ -144,7 +146,10 @@ export function AppTopBar({ title }: AppTopBarProps) {
         animationType="fade"
         onRequestClose={() => setMenuVisible(false)}
       >
-        <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={() => setMenuVisible(false)}>
+        <TouchableOpacity
+          style={[styles.overlay, { paddingTop: insets.top + 52 }]}
+          activeOpacity={1}
+          onPress={() => setMenuVisible(false)}>
           <View style={styles.menuCard}>
             <TouchableOpacity
               style={styles.menuItem}
@@ -171,7 +176,10 @@ export function AppTopBar({ title }: AppTopBarProps) {
         animationType="fade"
         onRequestClose={() => setProfileVisible(false)}
       >
-        <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={() => setProfileVisible(false)}>
+        <TouchableOpacity
+          style={[styles.overlay, { paddingTop: insets.top + 52 }]}
+          activeOpacity={1}
+          onPress={() => setProfileVisible(false)}>
           <View style={styles.profileCard}>
             <View style={styles.profileTop}>
               {profile.profileImage ? (
@@ -231,7 +239,6 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingTop: 42,
     paddingBottom: 18,
     paddingHorizontal: 16,
     backgroundColor: '#F9FAFB',
@@ -284,7 +291,6 @@ const styles = StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(44, 53, 65, 0.18)',
-    paddingTop: 94,
     paddingHorizontal: 16,
   },
   menuCard: {

@@ -477,18 +477,17 @@ export default function ArrivalReceiptScreen() {
             <Text style={styles.emptyText}>Сохраненные поставки появятся здесь после первой приемки.</Text>
           )}
         </View>
+        <View style={styles.footer}>
+          <TouchableOpacity style={styles.primaryButton} onPress={handleFinalize}>
+            <Text style={styles.primaryButtonText}>
+              {draft.id ? 'Сохранить изменения' : 'Завершить приемку'}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.secondaryButton} onPress={handleSaveDraft}>
+            <Text style={styles.secondaryButtonText}>Сохранить черновик</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
-
-      <View style={styles.footer}>
-        <TouchableOpacity style={styles.primaryButton} onPress={handleFinalize}>
-          <Text style={styles.primaryButtonText}>
-            {draft.id ? 'Сохранить изменения' : 'Завершить приемку'}
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.secondaryButton} onPress={handleSaveDraft}>
-          <Text style={styles.secondaryButtonText}>Сохранить черновик</Text>
-        </TouchableOpacity>
-      </View>
 
       <Modal
         visible={manualVisible}
@@ -578,8 +577,7 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 16,
-    paddingTop: 56,
-    paddingBottom: 140,
+    paddingBottom: 32,
   },
   header: {
     flexDirection: 'row',
@@ -880,16 +878,8 @@ const styles = StyleSheet.create({
     color: '#2C3541',
   },
   footer: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    paddingHorizontal: 16,
     paddingTop: 12,
-    paddingBottom: 20,
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
+    paddingBottom: 8,
   },
   primaryButton: {
     backgroundColor: '#D4F7E0',

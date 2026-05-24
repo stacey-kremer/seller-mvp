@@ -1,10 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert,
   Animated,
   Image,
   PanResponder,
-  SafeAreaView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -14,6 +12,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 type Product = {
   id: string;
@@ -32,25 +31,25 @@ type ArrivalDraft = {
   invoiceNumber: string;
   deliveryDate: string;
   note: string;
-  items: Array<{
+  items: {
     productId: string;
     barcode: string;
     name: string;
     quantity: number;
-  }>;
+  }[];
 };
 
 type SaleDraft = {
   paymentMethod: 'cash' | 'qr' | 'card';
   note: string;
-  items: Array<{
+  items: {
     productId: string;
     name: string;
     barcode: string;
     quantity: number;
     price: number;
     unit?: string;
-  }>;
+  }[];
 };
 
 const SHEET_HEIGHT = 420;
@@ -80,6 +79,8 @@ export default function CameraScannerScreen() {
   const [sheetMode, setSheetMode] = useState<'hidden' | 'info' | 'result'>('hidden');
   const router = useRouter();
   const params = useLocalSearchParams<{ source?: string }>();
+  const isArrivalFlow = params.source === 'arrival';
+  const isSaleFlow = params.source === 'sale';
   const translateY = useRef(new Animated.Value(SHEET_HIDDEN_OFFSET)).current;
   const sheetModeRef = useRef<'hidden' | 'info' | 'result'>('hidden');
 
@@ -90,10 +91,10 @@ export default function CameraScannerScreen() {
   }, [permission, requestPermission]);
 
   const helperSubtitle = useMemo(() => {
-    if (params.source === 'arrival') return 'Сканер поставки';
-    if (params.source === 'sale') return 'Сканер продажи';
+    if (isArrivalFlow) return 'Сканер поставки';
+    if (isSaleFlow) return 'Сканер продажи';
     return 'Сканер товаров';
-  }, [params.source]);
+  }, [isArrivalFlow, isSaleFlow]);
 
   const animateSheetTo = (toValue: number) => {
     Animated.spring(translateY, {
@@ -144,11 +145,10 @@ export default function CameraScannerScreen() {
   };
 
   const handleConfirm = async () => {
-    if (params.source === 'arrival') {
+    if (isArrivalFlow) {
       if (recognizedProduct) {
         const savedDraft = await AsyncStorage.getItem('arrivalDraft');
         const draft: ArrivalDraft = savedDraft ? JSON.parse(savedDraft) : createArrivalDraft();
-
         const existingItem = draft.items.find((item) => item.productId === recognizedProduct.id);
 
         draft.items = existingItem
@@ -179,16 +179,17 @@ export default function CameraScannerScreen() {
       return;
     }
 
-    if (params.source === 'sale') {
+    if (isSaleFlow) {
       if (!recognizedProduct) {
-        Alert.alert('Товар не найден', 'Для продажи можно выбрать только товар из каталога.');
-        handleScanAgain();
+        router.replace({
+          pathname: '/product-edit',
+          params: { barcode: recognizedBarcode, returnTo: 'sale-create' },
+        });
         return;
       }
 
       const savedDraft = await AsyncStorage.getItem('saleDraft');
       const draft: SaleDraft = savedDraft ? JSON.parse(savedDraft) : createSaleDraft();
-
       const existingItem = draft.items.find((item) => item.productId === recognizedProduct.id);
 
       draft.items = existingItem
@@ -283,7 +284,7 @@ export default function CameraScannerScreen() {
         <Stack.Screen options={{ headerShown: false }} />
         <View style={styles.permissionCard}>
           <View style={styles.permissionIcon}>
-            <Ionicons name="camera-outline" size={30} color="#2F80ED" />
+            <Ionicons name="camera-outline" size={30} color="#54CCFF" />
           </View>
           <Text style={styles.permissionTitle}>Нужен доступ к камере</Text>
           <Text style={styles.permissionText}>
@@ -303,8 +304,11 @@ export default function CameraScannerScreen() {
     );
   }
 
-  const statusText =
-    isAvailable ? 'В наличии' : params.source === 'sale' ? 'Нет в каталоге' : 'Новый товар';
+  const statusText = isAvailable
+    ? 'В наличии'
+    : isSaleFlow
+      ? 'Нет в каталоге'
+      : 'Не найден';
   const statusStyle = isAvailable ? styles.statusAvailable : styles.statusMissing;
   const statusTextStyle = isAvailable ? styles.statusAvailableText : styles.statusMissingText;
   const productMeta = [recognizedProduct?.type, recognizedProduct?.manufacturer]
@@ -378,10 +382,12 @@ export default function CameraScannerScreen() {
             {sheetMode === 'result' ? (
               <>
                 <View style={styles.sheetHeader}>
-                  <Text style={styles.sheetTitle}>Товар распознан</Text>
+                  <Text style={styles.sheetTitle}>
+                    {recognizedProduct ? 'Товар распознан' : 'Штрихкод распознан'}
+                  </Text>
                   <View style={[styles.statusBadge, statusStyle]}>
                     <Ionicons
-                      name={isAvailable ? 'checkmark' : 'add'}
+                      name={isAvailable ? 'checkmark' : 'search'}
                       size={14}
                       color={isAvailable ? '#2F80ED' : '#9A6700'}
                     />
@@ -433,9 +439,9 @@ export default function CameraScannerScreen() {
                     <View style={styles.productInfo}>
                       <Text style={styles.productName}>Товар не найден</Text>
                       <Text style={styles.productMeta}>
-                        {params.source === 'sale'
-                          ? 'Для продажи можно использовать только товар, который уже есть в каталоге.'
-                          : 'После подтверждения откроется создание новой карточки товара.'}
+                        {isSaleFlow
+                          ? 'Откроем форму товара, и этот штрихкод сразу попадет в поле.'
+                          : 'Можно сразу создать новый товар, а потом он автоматически добавится в накладную.'}
                       </Text>
                     </View>
                   </View>
@@ -445,12 +451,16 @@ export default function CameraScannerScreen() {
                   <Ionicons name="sparkles-outline" size={15} color="#2F80ED" />
                   <Text style={styles.actionHintText}>
                     {isAvailable
-                      ? params.source === 'sale'
+                      ? isSaleFlow
                         ? 'Товар будет сразу добавлен в текущую продажу.'
-                        : 'Товар будет сразу добавлен в текущую поставку.'
-                      : params.source === 'sale'
-                        ? 'Сначала добавьте этот товар в каталог, а затем возвращайтесь к продаже.'
-                        : 'После сохранения товар попадет и в каталог, и в эту поставку.'}
+                        : isArrivalFlow
+                          ? 'Товар будет сразу добавлен в текущую поставку.'
+                          : 'Откроем карточку уже существующего товара.'
+                      : isSaleFlow
+                        ? 'Сейчас откроется форма создания товара уже со штрихкодом.'
+                        : isArrivalFlow
+                          ? 'После сохранения товар попадет и в каталог, и в эту поставку.'
+                          : 'Сейчас откроется форма товара, и штрихкод уже будет подставлен.'}
                   </Text>
                 </View>
 
@@ -459,9 +469,9 @@ export default function CameraScannerScreen() {
                   <Text style={styles.confirmButtonText}>
                     {isAvailable
                       ? 'Подтвердить'
-                      : params.source === 'sale'
-                        ? 'Понятно'
-                        : 'Создать товар'}
+                      : isSaleFlow || isArrivalFlow
+                        ? 'Добавить товар'
+                        : 'Открыть форму'}
                   </Text>
                 </TouchableOpacity>
 
@@ -541,7 +551,7 @@ const styles = StyleSheet.create({
     width: 58,
     height: 58,
     borderRadius: 18,
-    backgroundColor: '#EAF3FF',
+    backgroundColor: '#EFF9FF',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
@@ -560,19 +570,23 @@ const styles = StyleSheet.create({
   },
   permissionButton: {
     borderRadius: 14,
-    backgroundColor: '#2F80ED',
+    backgroundColor: '#D4F7E0',
+    borderWidth: 1,
+    borderColor: '#B8E8CA',
     paddingVertical: 15,
     alignItems: 'center',
     marginBottom: 10,
   },
   permissionButtonText: {
-    color: '#FFFFFF',
+    color: '#2C3541',
     fontSize: 15,
     fontWeight: '700',
   },
   permissionSecondaryButton: {
     borderRadius: 14,
-    backgroundColor: '#F8FAFD',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
     paddingVertical: 15,
     alignItems: 'center',
   },

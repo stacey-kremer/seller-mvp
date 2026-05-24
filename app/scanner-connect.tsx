@@ -1,7 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -12,11 +11,14 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 type Product = {
   id: string;
   barcode: string;
   name: string;
+  retailPrice?: number;
+  unit?: string;
 };
 
 type ArrivalDraft = {
@@ -24,12 +26,25 @@ type ArrivalDraft = {
   invoiceNumber: string;
   deliveryDate: string;
   note: string;
-  items: Array<{
+  items: {
     productId: string;
     barcode: string;
     name: string;
     quantity: number;
-  }>;
+  }[];
+};
+
+type SaleDraft = {
+  paymentMethod: 'cash' | 'qr' | 'card';
+  note: string;
+  items: {
+    productId: string;
+    name: string;
+    barcode: string;
+    quantity: number;
+    price: number;
+    unit?: string;
+  }[];
 };
 
 type ScannerDevice = {
@@ -37,28 +52,12 @@ type ScannerDevice = {
   name: string;
   meta: string;
   type: 'bluetooth' | 'usb';
+  isRemembered?: boolean;
 };
 
-const MOCK_DEVICES: ScannerDevice[] = [
-  {
-    id: 'honeywell',
-    name: 'Honeywell Voyager 1450',
-    meta: 'HID-VID:0C2E-PID:0A07',
-    type: 'usb',
-  },
-  {
-    id: 'zebra',
-    name: 'Zebra DS2208-SR',
-    meta: 'BT-ADDR: 00:1B:44:11:3A:B7',
-    type: 'bluetooth',
-  },
-  {
-    id: 'datalogic',
-    name: 'Datalogic QuickScan',
-    meta: 'BT-ADDR: 14:F2:A1:00:99:C4',
-    type: 'bluetooth',
-  },
-];
+const ACTIVE_SCANNER_KEY = 'activeHardwareScanner';
+const SALE_DRAFT_KEY = 'saleDraft';
+const SCAN_IDLE_TIMEOUT_MS = 250;
 
 const createArrivalDraft = (): ArrivalDraft => ({
   supplier: 'ООО "ОптТорг Сибирь"',
@@ -68,98 +67,278 @@ const createArrivalDraft = (): ArrivalDraft => ({
   items: [],
 });
 
+const createSaleDraft = (): SaleDraft => ({
+  paymentMethod: 'cash',
+  note: '',
+  items: [],
+});
+
+const createManualDevice = (name?: string): ScannerDevice => ({
+  id: 'paired-hid-scanner',
+  name: name?.trim() || 'Подключенный HID-сканер',
+  meta: 'Подключено через системный Bluetooth',
+  type: 'bluetooth',
+  isRemembered: true,
+});
+
+const normalizeBarcode = (value: string) => value.replace(/[\r\n\t]/g, '').trim();
+
 export default function ScannerConnectScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ source?: string }>();
-  const [activeDevice, setActiveDevice] = useState<ScannerDevice | null>({
-    id: 'netum',
-    name: 'Netum DS7100 Wireless',
-    meta: 'Подключено • Bluetooth',
-    type: 'bluetooth',
-  });
-  const [devices, setDevices] = useState<ScannerDevice[]>(MOCK_DEVICES);
-  const [isScanning, setIsScanning] = useState(false);
+  const inputRef = useRef<TextInput | null>(null);
+  const scanTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isSubmittingRef = useRef(false);
+  const isScanLockedRef = useRef(false);
+
+  const [activeDevice, setActiveDevice] = useState<ScannerDevice | null>(null);
+  const [knownDevices, setKnownDevices] = useState<ScannerDevice[]>([]);
+  const [deviceNameInput, setDeviceNameInput] = useState('');
   const [hardwareBarcode, setHardwareBarcode] = useState('');
+  const [lastScannedBarcode, setLastScannedBarcode] = useState('');
+  const [isScanning, setIsScanning] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const systemStatuses = useMemo(
-    () => [
-      { label: 'Bluetooth: Активен', icon: 'bluetooth-outline' as const },
-      { label: 'USB: Активен', icon: 'flash-outline' as const },
-    ],
-    [],
-  );
+  useEffect(() => {
+    void restoreActiveDevice();
 
-  const handleConnect = (device: ScannerDevice) => {
-    setActiveDevice({
-      ...device,
-      meta: device.type === 'bluetooth' ? 'Подключено • Bluetooth' : 'Подключено • USB',
-    });
-  };
+    const focusTimer = setTimeout(() => {
+      inputRef.current?.focus();
+    }, 250);
 
-  const handleDisconnect = () => {
-    setActiveDevice(null);
-    setHardwareBarcode('');
-  };
+    return () => {
+      clearTimeout(focusTimer);
+      if (scanTimeoutRef.current) {
+        clearTimeout(scanTimeoutRef.current);
+      }
+    };
+  }, []);
 
-  const handleRefresh = () => {
-    setIsScanning(true);
-    setTimeout(() => {
-      setDevices(MOCK_DEVICES);
-      setIsScanning(false);
-    }, 600);
-  };
-
-  const handleAddBarcode = async () => {
-    const normalized = hardwareBarcode.trim();
-    if (!normalized) {
-      Alert.alert(
-        'Ожидается сканирование',
-        'Подключите сканер и отсканируйте штрихкод в поле ниже.',
-      );
+  const restoreActiveDevice = async () => {
+    const savedDevice = await AsyncStorage.getItem(ACTIVE_SCANNER_KEY);
+    if (!savedDevice) {
+      setKnownDevices([]);
       return;
     }
 
-    const savedProducts = await AsyncStorage.getItem('products');
-    const products: Product[] = savedProducts ? JSON.parse(savedProducts) : [];
-    const product = products.find((item) => item.barcode === normalized);
+    try {
+      const parsedDevice = JSON.parse(savedDevice) as ScannerDevice;
+      setActiveDevice(parsedDevice);
+      setKnownDevices([parsedDevice]);
+      setDeviceNameInput(parsedDevice.name);
+    } catch {
+      await AsyncStorage.removeItem(ACTIVE_SCANNER_KEY);
+      setKnownDevices([]);
+    }
+  };
 
-    if (params.source === 'arrival') {
-      if (product) {
-        const savedDraft = await AsyncStorage.getItem('arrivalDraft');
-        const draft: ArrivalDraft = savedDraft ? JSON.parse(savedDraft) : createArrivalDraft();
+  const persistActiveDevice = async (device: ScannerDevice) => {
+    setActiveDevice(device);
+    setKnownDevices([device]);
+    await AsyncStorage.setItem(ACTIVE_SCANNER_KEY, JSON.stringify(device));
+  };
 
-        const existingItem = draft.items.find((item) => item.productId === product.id);
+  const addProductToArrival = async (product: Product) => {
+    const savedDraft = await AsyncStorage.getItem('arrivalDraft');
+    const draft: ArrivalDraft = savedDraft ? JSON.parse(savedDraft) : createArrivalDraft();
 
-        draft.items = existingItem
-          ? draft.items.map((item) =>
-              item.productId === product.id
-                ? { ...item, quantity: item.quantity + 1 }
-                : item,
-            )
-          : [
-              {
-                productId: product.id,
-                barcode: product.barcode,
-                name: product.name,
-                quantity: 1,
-              },
-              ...draft.items,
-            ];
+    const existingItem = draft.items.find((item) => item.productId === product.id);
 
-        await AsyncStorage.setItem('arrivalDraft', JSON.stringify(draft));
-        router.replace('/(tabs)/arrival');
+    draft.items = existingItem
+      ? draft.items.map((item) =>
+          item.productId === product.id ? { ...item, quantity: item.quantity + 1 } : item,
+        )
+      : [
+          {
+            productId: product.id,
+            barcode: product.barcode,
+            name: product.name,
+            quantity: 1,
+          },
+          ...draft.items,
+        ];
+
+    await AsyncStorage.setItem('arrivalDraft', JSON.stringify(draft));
+  };
+
+  const addProductToSale = async (product: Product) => {
+    const savedDraft = await AsyncStorage.getItem(SALE_DRAFT_KEY);
+    const draft: SaleDraft = savedDraft ? JSON.parse(savedDraft) : createSaleDraft();
+
+    const existingItem = draft.items.find((item) => item.productId === product.id);
+
+    draft.items = existingItem
+      ? draft.items.map((item) =>
+          item.productId === product.id ? { ...item, quantity: item.quantity + 1 } : item,
+        )
+      : [
+          {
+            productId: product.id,
+            name: product.name,
+            barcode: product.barcode,
+            quantity: 1,
+            price: product.retailPrice || 0,
+            unit: product.unit || 'шт',
+          },
+          ...draft.items,
+        ];
+
+    await AsyncStorage.setItem(SALE_DRAFT_KEY, JSON.stringify(draft));
+  };
+
+  const submitScannedBarcode = async (rawValue?: string) => {
+    const normalized = normalizeBarcode(rawValue ?? hardwareBarcode);
+    if (!normalized || isSubmittingRef.current || isScanLockedRef.current) {
+      return;
+    }
+
+    isSubmittingRef.current = true;
+    isScanLockedRef.current = true;
+    setIsSubmitting(true);
+    let keepLockedUntilUnmount = false;
+
+    try {
+      const savedProducts = await AsyncStorage.getItem('products');
+      const products: Product[] = savedProducts ? JSON.parse(savedProducts) : [];
+      const product = products.find((item) => item.barcode === normalized);
+
+      setHardwareBarcode('');
+      setLastScannedBarcode(normalized);
+
+      if (params.source === 'arrival') {
+        if (product) {
+          await addProductToArrival(product);
+          Alert.alert('Товар добавлен', `${product.name} добавлен в поставку.`);
+          return;
+        }
+
+        keepLockedUntilUnmount = true;
+        setHardwareBarcode('');
+        router.push({
+          pathname: '/product-edit',
+          params: { barcode: normalized, fromArrival: 'true' },
+        });
         return;
       }
 
-      router.replace({
-        pathname: '/product-edit',
-        params: { barcode: normalized, fromArrival: 'true' },
-      });
+      if (params.source === 'sale') {
+        if (!product) {
+          Alert.alert('Товар не найден', 'Для продажи можно добавить только товар из каталога.');
+          return;
+        }
+
+        await addProductToSale(product);
+        Alert.alert('Товар добавлен', `${product.name} добавлен в продажу.`);
+        return;
+      }
+
+      if (product) {
+        Alert.alert('Штрихкод считан', `${product.name}\n${normalized}`);
+      } else {
+        Alert.alert('Штрихкод считан', normalized);
+      }
+    } finally {
+      isSubmittingRef.current = false;
+      setIsSubmitting(false);
+
+      if (keepLockedUntilUnmount) {
+        return;
+      }
+
+      setTimeout(() => {
+        isScanLockedRef.current = false;
+        inputRef.current?.focus();
+      }, 150);
+    }
+  };
+
+  const scheduleScannerSubmit = (value: string) => {
+    if (scanTimeoutRef.current) {
+      clearTimeout(scanTimeoutRef.current);
+    }
+
+    const normalized = normalizeBarcode(value);
+    if (!normalized) {
       return;
     }
 
-    router.back();
+    setIsScanning(true);
+    scanTimeoutRef.current = setTimeout(() => {
+      setIsScanning(false);
+      void submitScannedBarcode(normalized);
+    }, SCAN_IDLE_TIMEOUT_MS);
   };
+
+  const handleBarcodeChange = (value: string) => {
+    if (isScanLockedRef.current) {
+      return;
+    }
+
+    setHardwareBarcode(value);
+    scheduleScannerSubmit(value);
+  };
+
+  const handleBarcodeSubmit = () => {
+    if (scanTimeoutRef.current) {
+      clearTimeout(scanTimeoutRef.current);
+    }
+
+    setIsScanning(false);
+    void submitScannedBarcode();
+  };
+
+  const handleConnectRemembered = async () => {
+    const device = createManualDevice(deviceNameInput);
+    await persistActiveDevice(device);
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 100);
+  };
+
+  const handleDisconnect = async () => {
+    setActiveDevice(null);
+    setKnownDevices([]);
+    setHardwareBarcode('');
+    setLastScannedBarcode('');
+    isScanLockedRef.current = false;
+    await AsyncStorage.removeItem(ACTIVE_SCANNER_KEY);
+  };
+
+  const handleRefresh = async () => {
+    setIsScanning(true);
+    isScanLockedRef.current = false;
+    await restoreActiveDevice();
+    setTimeout(() => {
+      setIsScanning(false);
+      inputRef.current?.focus();
+    }, 250);
+  };
+
+  const systemStatuses = useMemo(
+    () => [
+      {
+        label: activeDevice ? 'Bluetooth HID готов' : 'Bluetooth ожидает подключения',
+        icon: 'bluetooth-outline' as const,
+      },
+      {
+        label: 'Сканирование через ввод с клавиатуры',
+        icon: 'barcode-outline' as const,
+      },
+    ],
+    [activeDevice],
+  );
+
+  const helperText = useMemo(() => {
+    if (params.source === 'arrival') {
+      return 'После сканирования товар будет добавлен в поставку или откроется создание товара.';
+    }
+
+    if (params.source === 'sale') {
+      return 'После сканирования товар будет добавлен в черновик продажи.';
+    }
+
+    return 'Экран готов принять штрихкод от физического сканера в режиме HID.';
+  }, [params.source]);
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -170,23 +349,23 @@ export default function ScannerConnectScreen() {
           <Ionicons name="chevron-back" size={24} color="#2C3541" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Подключение сканера</Text>
-        <TouchableOpacity style={styles.headerIconButton} onPress={handleRefresh}>
+        <TouchableOpacity style={styles.headerIconButton} onPress={() => void handleRefresh()}>
           <Ionicons name="refresh-outline" size={20} color="#2C3541" />
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>СТАТУС СИСТЕМЫ</Text>
           <View style={styles.statusBadge}>
-            <Text style={styles.statusBadgeText}>Включено</Text>
+            <Text style={styles.statusBadgeText}>{activeDevice ? 'Подключено' : 'Ожидание'}</Text>
           </View>
         </View>
 
         <View style={styles.statusRow}>
           {systemStatuses.map((status) => (
             <View key={status.label} style={styles.systemChip}>
-              <Ionicons name={status.icon} size={14} color="#2F80ED" />
+              <Ionicons name={status.icon} size={14} color="#54CCFF" />
               <Text style={styles.systemChipText}>{status.label}</Text>
             </View>
           ))}
@@ -198,13 +377,7 @@ export default function ScannerConnectScreen() {
             <>
               <View style={styles.activeTop}>
                 <View style={styles.activeIcon}>
-                  <Ionicons
-                    name={
-                      activeDevice.type === 'bluetooth' ? 'bluetooth-outline' : 'flash-outline'
-                    }
-                    size={22}
-                    color="#2F80ED"
-                  />
+                  <Ionicons name="bluetooth-outline" size={22} color="#2F80ED" />
                 </View>
                 <View style={styles.activeInfo}>
                   <Text style={styles.activeName}>{activeDevice.name}</Text>
@@ -214,21 +387,39 @@ export default function ScannerConnectScreen() {
 
               <View style={styles.scanInputCard}>
                 <Text style={styles.scanInputLabel}>Сканирование с устройства</Text>
+                <Text style={styles.scanHint}>{helperText}</Text>
                 <TextInput
+                  ref={inputRef}
                   style={styles.scanInput}
                   value={hardwareBarcode}
-                  onChangeText={setHardwareBarcode}
+                  onChangeText={handleBarcodeChange}
+                  onSubmitEditing={handleBarcodeSubmit}
                   placeholder="Ожидание сканирования..."
                   placeholderTextColor="#9CA3AF"
                   autoFocus
+                  blurOnSubmit={false}
+                  autoCorrect={false}
+                  autoCapitalize="none"
+                  showSoftInputOnFocus={false}
+                  contextMenuHidden
+                  returnKeyType="done"
                 />
+                {!!lastScannedBarcode && (
+                  <Text style={styles.lastScanText}>Последний код: {lastScannedBarcode}</Text>
+                )}
               </View>
 
-              <TouchableOpacity style={styles.primaryButton} onPress={handleAddBarcode}>
-                <Text style={styles.primaryButtonText}>Добавить в поставку</Text>
+              <TouchableOpacity
+                style={[styles.primaryButton, isSubmitting && styles.primaryButtonDisabled]}
+                onPress={handleBarcodeSubmit}
+                disabled={isSubmitting}
+              >
+                <Text style={styles.primaryButtonText}>
+                  {params.source === 'sale' ? 'Добавить в продажу' : 'Добавить в поставку'}
+                </Text>
               </TouchableOpacity>
 
-              <TouchableOpacity style={styles.disconnectButton} onPress={handleDisconnect}>
+              <TouchableOpacity style={styles.disconnectButton} onPress={() => void handleDisconnect()}>
                 <Ionicons name="close-circle-outline" size={16} color="#EF5350" />
                 <Text style={styles.disconnectText}>Отключить сканер</Text>
               </TouchableOpacity>
@@ -237,59 +428,86 @@ export default function ScannerConnectScreen() {
             <View style={styles.emptyActiveState}>
               <Text style={styles.emptyActiveTitle}>Сканер не подключен</Text>
               <Text style={styles.emptyActiveText}>
-                Выберите устройство из списка ниже, чтобы начать приемку через физический сканер.
+                Подключите barcode scanner к телефону через системный Bluetooth как HID-клавиатуру,
+                затем укажите его название ниже.
               </Text>
             </View>
           )}
         </View>
 
         <View style={styles.searchSectionHeader}>
-          <Text style={styles.sectionTitle}>ПОИСК УСТРОЙСТВ</Text>
-          <Text style={styles.scanningText}>
-            {isScanning ? 'Сканирование...' : 'Готово к поиску'}
+          <Text style={styles.sectionTitle}>РЕАЛЬНОЕ УСТРОЙСТВО</Text>
+          <Text style={styles.scanningText}>{isScanning ? 'Принимаем сигнал...' : 'Готово к сканированию'}</Text>
+        </View>
+
+        <View style={styles.deviceSetupCard}>
+          <Text style={styles.deviceSetupTitle}>Название подключенного сканера</Text>
+          <Text style={styles.deviceSetupText}>
+            Android уже держит bluetooth-соединение. Здесь мы сохраняем реальное имя устройства, чтобы
+            экран работал как точка приема штрихкодов от HID-сканера.
           </Text>
+          <TextInput
+            style={styles.deviceNameInput}
+            value={deviceNameInput}
+            onChangeText={setDeviceNameInput}
+            placeholder="Например, Netum C750 или Zebra DS2278"
+            placeholderTextColor="#9CA3AF"
+            autoCapitalize="words"
+          />
+          <TouchableOpacity style={styles.connectButton} onPress={() => void handleConnectRemembered()}>
+            <Text style={styles.connectButtonText}>Сохранить и подключить</Text>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.devicesList}>
-          {devices.map((device) => (
-            <View key={device.id} style={styles.deviceRow}>
-              <View style={styles.deviceIcon}>
-                <Ionicons
-                  name={device.type === 'bluetooth' ? 'bluetooth-outline' : 'flash-outline'}
-                  size={20}
-                  color="#6B7280"
-                />
-              </View>
+          {knownDevices.length ? (
+            knownDevices.map((device) => (
+              <View key={device.id} style={styles.deviceRow}>
+                <View style={styles.deviceIcon}>
+                  <Ionicons name="bluetooth-outline" size={20} color="#6B7280" />
+                </View>
 
-              <View style={styles.deviceInfo}>
-                <Text style={styles.deviceName}>{device.name}</Text>
-                <Text style={styles.deviceMeta}>{device.meta}</Text>
-              </View>
+                <View style={styles.deviceInfo}>
+                  <Text style={styles.deviceName}>{device.name}</Text>
+                  <Text style={styles.deviceMeta}>
+                    {device.isRemembered ? 'Сохраненное устройство' : device.meta}
+                  </Text>
+                </View>
 
-              <TouchableOpacity
-                style={styles.connectButton}
-                onPress={() => handleConnect(device)}
-              >
-                <Text style={styles.connectButtonText}>Подключить</Text>
-              </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.connectButtonCompact}
+                  onPress={() => void persistActiveDevice(device)}
+                >
+                  <Text style={styles.connectButtonText}>Выбрать</Text>
+                </TouchableOpacity>
+              </View>
+            ))
+          ) : (
+            <View style={styles.emptyDevicesState}>
+              <Text style={styles.emptyDevicesTitle}>Список пока пуст</Text>
+              <Text style={styles.emptyDevicesText}>
+                После первого подключения мы сохраним ваш сканер здесь и будем использовать его как
+                активное устройство.
+              </Text>
             </View>
-          ))}
+          )}
         </View>
 
-        <TouchableOpacity style={styles.refreshGhostButton} onPress={handleRefresh}>
+        <TouchableOpacity style={styles.refreshGhostButton} onPress={() => void handleRefresh()}>
           <Ionicons name="refresh-outline" size={16} color="#6B7280" />
-          <Text style={styles.refreshGhostText}>Обновить список устройств</Text>
+          <Text style={styles.refreshGhostText}>Обновить состояние сканера</Text>
         </TouchableOpacity>
 
         <View style={styles.tipCard}>
           <View style={styles.tipIcon}>
-            <Ionicons name="information-circle-outline" size={18} color="#2F80ED" />
+            <Ionicons name="information-circle-outline" size={18} color="#54CCFF" />
           </View>
           <View style={styles.tipContent}>
-            <Text style={styles.tipTitle}>Совет по подключению</Text>
+            <Text style={styles.tipTitle}>Как это работает</Text>
             <Text style={styles.tipText}>
-              Для стабильной работы Bluetooth-сканеров рекомендуется использовать режим HID
-              Profile. Убедитесь, что сканер переведен в режим сопряжения согласно инструкции.
+              Большинство bluetooth barcode scanner работают в режиме HID и отправляют символы как
+              обычная клавиатура. Экран держит фокус на поле ввода, ловит быстрый поток символов,
+              дожидается Enter или короткой паузы и сразу обрабатывает штрихкод.
             </Text>
           </View>
         </View>
@@ -367,6 +585,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 10,
     marginBottom: 18,
+    flexWrap: 'wrap',
   },
   systemChip: {
     flexDirection: 'row',
@@ -431,19 +650,35 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     marginBottom: 6,
   },
+  scanHint: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#6B7280',
+    marginBottom: 10,
+  },
   scanInput: {
     fontSize: 15,
     color: '#2C3541',
+    minHeight: 24,
+  },
+  lastScanText: {
+    marginTop: 10,
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#2F80ED',
   },
   primaryButton: {
-    backgroundColor: '#2F80ED',
-    borderRadius: 12,
+    backgroundColor: '#D4F7E0FF',
+    borderRadius: 8,
     alignItems: 'center',
-    paddingVertical: 13,
+    paddingVertical: 12,
     marginBottom: 10,
   },
+  primaryButtonDisabled: {
+    opacity: 0.6,
+  },
   primaryButtonText: {
-    color: '#FFFFFF',
+    color: '#2C3541',
     fontSize: 15,
     fontWeight: '700',
   },
@@ -481,6 +716,37 @@ const styles = StyleSheet.create({
     color: '#2F80ED',
     fontSize: 12,
     fontWeight: '600',
+  },
+  deviceSetupCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    padding: 14,
+    marginBottom: 14,
+  },
+  deviceSetupTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#2C3541',
+    marginBottom: 6,
+  },
+  deviceSetupText: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#6B7280',
+    marginBottom: 12,
+  },
+  deviceNameInput: {
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    backgroundColor: '#F9FAFB',
+    fontSize: 15,
+    color: '#2C3541',
+    marginBottom: 12,
   },
   devicesList: {
     backgroundColor: '#FFFFFF',
@@ -520,15 +786,36 @@ const styles = StyleSheet.create({
     color: '#8E96A3',
   },
   connectButton: {
-    backgroundColor: '#2F80ED',
-    borderRadius: 10,
+    backgroundColor: '#D4F7E0FF',
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  connectButtonCompact: {
+    backgroundColor: '#D4F7E0FF',
+    borderRadius: 8,
     paddingHorizontal: 14,
     paddingVertical: 9,
   },
   connectButtonText: {
-    color: '#FFFFFF',
+    color: '#2C3541',
     fontSize: 13,
     fontWeight: '700',
+  },
+  emptyDevicesState: {
+    padding: 18,
+  },
+  emptyDevicesTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#2C3541',
+    marginBottom: 6,
+  },
+  emptyDevicesText: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#6B7280',
   },
   refreshGhostButton: {
     marginTop: 14,
@@ -562,7 +849,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: '#EFF9FF',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
